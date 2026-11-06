@@ -1,0 +1,62 @@
+name: Cairo12 Android
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      signed_release:
+        description: 'Build a signed release APK and AAB (requires CAIRO12 signing secrets)'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Build test APK
+        run: gradle --no-daemon :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cairo12-test-apk
+          path: app/build/outputs/apk/debug/*.apk
+      - name: Prepare Cairo12 release key
+        if: github.event.inputs.signed_release == 'true'
+        env:
+          KEY_BASE64: ${{ secrets.CAIRO12_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.CAIRO12_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAIRO12_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAIRO12_KEY_PASSWORD }}
+        run: |
+          test -n "$KEY_BASE64" && test -n "$STORE_PASSWORD" && test -n "$KEY_ALIAS" && test -n "$KEY_PASSWORD" || { echo 'Missing CAIRO12 signing secret'; exit 1; }
+          printf '%s' "$KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/cairo12-release.jks"
+      - name: Build signed release
+        if: github.event.inputs.signed_release == 'true'
+        env:
+          CAIRO12_STORE_FILE: ${{ runner.temp }}/cairo12-release.jks
+          CAIRO12_STORE_PASSWORD: ${{ secrets.CAIRO12_STORE_PASSWORD }}
+          CAIRO12_KEY_ALIAS: ${{ secrets.CAIRO12_KEY_ALIAS }}
+          CAIRO12_KEY_PASSWORD: ${{ secrets.CAIRO12_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
+      - uses: actions/upload-artifact@v4
+        if: github.event.inputs.signed_release == 'true'
+        with:
+          name: Cairo12-signed-release
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+
+      - name: Remove temporary release key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cairo12-release.jks"
