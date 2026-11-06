@@ -1,0 +1,1 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/brand_cream"/><item><inset android:drawable="@drawable/logo_blend" android:inset="12%"/></item></layer-list>

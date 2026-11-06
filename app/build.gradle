@@ -1,0 +1,57 @@
+import groovy.json.JsonSlurper
+plugins { id 'com.android.application' }
+// Keep builds usable before Firebase is configured. Each variant reads its matching Android app.
+def firebaseFile = file('google-services.json')
+def firebaseConfig = firebaseFile.exists() ? new JsonSlurper().parse(firebaseFile) : null
+def firebaseValues = { packageId ->
+    def client = firebaseConfig?.client?.find { it.client_info.android_client_info.package_name == packageId }
+    return [FIREBASE_APP_ID: client?.client_info?.mobilesdk_app_id ?: '', FIREBASE_API_KEY: client?.api_key?.getAt(0)?.current_key ?: '', FIREBASE_PROJECT_ID: firebaseConfig?.project_info?.project_id ?: '', FIREBASE_SENDER_ID: firebaseConfig?.project_info?.project_number ?: '']
+}
+android {
+    namespace 'ng.cairo12.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'ng.cairo12.app'
+        minSdk 24
+        targetSdk 36
+        versionCode 18
+        versionName '1.0.17'
+        buildConfigField 'String', 'SITE_URL', '"https://cairo12.ng/"'
+        manifestPlaceholders = [siteHost: 'cairo12.ng']
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { coreLibraryDesugaringEnabled true; sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    signingConfigs {
+        debug { storeFile rootProject.file('tooling/cairo12-test.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' }
+        release {
+            if (System.getenv('CAIRO12_STORE_FILE')) {
+                storeFile file(System.getenv('CAIRO12_STORE_FILE'))
+                storePassword System.getenv('CAIRO12_STORE_PASSWORD')
+                keyAlias System.getenv('CAIRO12_KEY_ALIAS')
+                keyPassword System.getenv('CAIRO12_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            firebaseValues('ng.cairo12.app.debug').each { key, value -> buildConfigField 'String', key, groovy.json.JsonOutput.toJson(value) }
+            applicationIdSuffix '.debug'; versionNameSuffix '-test'
+            buildConfigField 'String', 'SITE_URL', '"https://cairo12.ng/"'
+            manifestPlaceholders = [siteHost: 'cairo12.ng']
+        }
+        release { firebaseValues('ng.cairo12.app').each { key, value -> buildConfigField 'String', key, groovy.json.JsonOutput.toJson(value) }; minifyEnabled false; if (System.getenv('CAIRO12_STORE_FILE')) signingConfig signingConfigs.release }
+    }
+}
+dependencies {
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.firebase:firebase-messaging:24.1.2'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.viewpager2:viewpager2:1.1.0'
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-ui:1.5.1'
+}

@@ -1,0 +1,1 @@
+<resources><style name="Cairo12Launch" parent="Cairo12Theme"><item name="android:windowSplashScreenBackground">#FAF8F3</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_icon</item><item name="android:windowSplashScreenIconBackgroundColor">#FAF8F3</item><item name="android:windowBackground">#FAF8F3</item></style></resources>

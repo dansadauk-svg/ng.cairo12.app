@@ -1,0 +1,1 @@
+Nigeria locations data adapted from Open Admin Data (https://github.com/open-admin-data/nigeria-administrative-divisions), CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: retained state/LGA names only, alphabetized lists and labelled Federal Capital Territory as FCT (Abuja). Source snapshot retrieved 5 November 2026.

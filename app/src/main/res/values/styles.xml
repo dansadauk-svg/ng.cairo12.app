@@ -1,0 +1,13 @@
+<resources>
+    <style name="Cairo12Base" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#173F39</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">#FAF8F3</item>
+        <item name="android:statusBarColor">#FAF8F3</item>
+        <item name="android:navigationBarColor">#FAF8F3</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="Cairo12Theme" parent="Cairo12Base" />
+    <style name="Cairo12Launch" parent="Cairo12Theme"><item name="android:windowBackground">@drawable/launch_background</item></style>
+</resources>

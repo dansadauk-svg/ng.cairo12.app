@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "144162860912",
+    "project_id": "cairo12-cee3c",
+    "storage_bucket": "cairo12-cee3c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:144162860912:android:346a629bb29ff8cac9e9b5",
+        "android_client_info": {
+          "package_name": "ng.cairo12.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdLjfsebO0ZH7a84WSNGEqJsO5Yd4h8d8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:144162860912:android:18e7dfc08029627ac9e9b5",
+        "android_client_info": {
+          "package_name": "ng.cairo12.app.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdLjfsebO0ZH7a84WSNGEqJsO5Yd4h8d8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
