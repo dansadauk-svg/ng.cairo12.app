@@ -18,7 +18,7 @@ final class Api {
     private final CatalogueCache catalogueCache;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
-    Api(Context context) { vault = new Vault(context); catalogueCache=new CatalogueCache(new File(context.getCacheDir(),"catalogue_cache")); }
+    Api(Context context) { vault = new Vault(context); catalogueCache=new CatalogueCache(new File(context.getCacheDir(),"catalogue_cache_included_shipping")); }
     void request(String path, JSONObject body, Result callback) {
         worker.execute(() -> {
             try { Object value = send(path, body, null, null); main.post(() -> callback.done(value, null)); }

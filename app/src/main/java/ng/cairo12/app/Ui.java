@@ -40,6 +40,7 @@ final class Ui {
                 case "Bag": case "My orders": p.moveTo(5,7); p.lineTo(19,7); p.lineTo(20,21); p.lineTo(4,21); p.close(); p.moveTo(9,9); p.lineTo(9,6); p.cubicTo(9,2,15,2,15,6); p.lineTo(15,9); break;
                 case "Account": canvas.drawCircle(12,7,3.5f,paint); p.moveTo(5,21); p.lineTo(5,19); p.cubicTo(5,10,19,10,19,19); p.lineTo(19,21); break;
                 case "Speaker": p.moveTo(3,9);p.lineTo(7,9);p.lineTo(12,5);p.lineTo(12,19);p.lineTo(7,15);p.lineTo(3,15);p.close();if(soundEnabled){canvas.drawArc(10,6,22,18,-50,100,false,paint);canvas.drawArc(12,9,18,15,-55,110,false,paint);}else{p.moveTo(16,9);p.lineTo(21,15);p.moveTo(21,9);p.lineTo(16,15);}break;
+                case "WhatsApp": canvas.drawCircle(12,11,8,paint);p.moveTo(5,16);p.lineTo(3,21);p.lineTo(9,19);p.moveTo(8,7);p.cubicTo(6,11,12,17,16,14);p.lineTo(14,12);p.lineTo(12,13);p.lineTo(10,10);p.lineTo(11,9);p.close();break;
                 case "Share": p.moveTo(7,17); p.lineTo(18,6); p.moveTo(8,6); p.lineTo(18,6); p.lineTo(18,16); break;
                 default: p.moveTo(12,21); p.cubicTo(-5,11,4,-1,12,7); p.cubicTo(20,-1,29,11,12,21); break;
             }

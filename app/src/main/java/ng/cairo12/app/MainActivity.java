@@ -42,6 +42,7 @@ public final class MainActivity extends Activity {
     private final Set<Long> viewedProducts=new HashSet<>();
     private long pendingView=-1;
     private RecyclerView feed;
+    private Button backTop;private LinearLayout floatingButtons;
     private androidx.swiperefreshlayout.widget.SwipeRefreshLayout refresh;
     private FrameLayout discoverBody;
     private View feedNotice;
@@ -169,7 +170,7 @@ public final class MainActivity extends Activity {
             public void onScrolled(RecyclerView view,int dx,int dy){
                 LinearLayoutManager manager=(LinearLayoutManager)view.getLayoutManager();
                 if(!loading&&page<pages&&manager.findLastVisibleItemPosition()>=adapter.getItemCount()-3)loadPage(false);
-                activateVisible();
+                updateFloating();activateVisible();
             }
             public void onScrollStateChanged(RecyclerView view,int state){if(state==RecyclerView.SCROLL_STATE_IDLE)activateVisible();}
         });
@@ -179,9 +180,9 @@ public final class MainActivity extends Activity {
         discoverBody=new FrameLayout(this);discoverBody.addView(feed,new FrameLayout.LayoutParams(-1,-1));refresh.addView(discoverBody);content.addView(refresh,new FrameLayout.LayoutParams(-1,-1));
         refresh.setOnChildScrollUpCallback((parent,child)->loading||sheet!=null||feed.canScrollVertically(-1));
         refresh.setOnRefreshListener(()->{if(loading){refresh.setRefreshing(false);return;}player.pause();pendingView=-1;loadPage(true,true);});
-        try{String cached=getSharedPreferences("feed_cache",MODE_PRIVATE).getString("catalogue_"+BuildConfig.SITE_URL,"");if(!cached.isEmpty()){catalogue=new JSONObject(cached);JSONArray list=catalogue.optJSONArray("products");if(list!=null)for(int i=0;i<list.length();i++){JSONObject p=list.optJSONObject(i);if(p!=null){products.add(p);}}applyWeeklyStories();adapter.notifyDataSetChanged();feed.post(this::activateVisible);}}catch(Exception ignored){}
+        try{String cached=getSharedPreferences("feed_cache",MODE_PRIVATE).getString("catalogue_shipping_"+BuildConfig.SITE_URL,"");if(!cached.isEmpty()){catalogue=new JSONObject(cached);JSONArray list=catalogue.optJSONArray("products");if(list!=null)for(int i=0;i<list.length();i++){JSONObject p=list.optJSONObject(i);if(p!=null){products.add(p);}}applyWeeklyStories();adapter.notifyDataSetChanged();feed.post(this::activateVisible);}}catch(Exception ignored){}
         ProgressBar pending=new ProgressBar(this);pending.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(GOLD));FrameLayout.LayoutParams waiting=new FrameLayout.LayoutParams(dp(this,32),dp(this,32),Gravity.CENTER);if(products.isEmpty())content.addView(pending,waiting);
-        loadPage(true);
+        updateFloating();loadPage(true);
     }
     private void loadPage(boolean first){loadPage(first,false);}
     private void loadPage(boolean first,boolean force) {
@@ -190,12 +191,12 @@ public final class MainActivity extends Activity {
             if(generation!=screenGeneration)return;loading=false;if(refresh!=null)refresh.setRefreshing(false); if(first){for(int i=content.getChildCount()-1;i>=0;i--)if(content.getChildAt(i) instanceof ProgressBar)content.removeViewAt(i);}
             if(error!=null){if(first&&products.isEmpty())message("Couldn’t load the collection",error,()->discover());else{toast("Showing saved products. Refresh when you’re connected.");feed.post(this::activateVisible);}return;}
             if(feedNotice!=null&&discoverBody!=null){discoverBody.removeView(feedNotice);feedNotice=null;}
-            catalogue=(JSONObject)value;if(catalogue.optBoolean("_offline"))toast("Offline: showing saved products. Prices are confirmed when you order.");if(first){player.pause();if(attachedPlayer!=null)attachedPlayer.setPlayer(null);attachedPlayer=null;attachedVideoUrl=null;activeProduct=-1;videoPosters.clear();getSharedPreferences("feed_cache",MODE_PRIVATE).edit().putString("catalogue_"+BuildConfig.SITE_URL,catalogue.toString()).apply();products.clear();stories.clear();}page=next;pages=catalogue.optInt("pages",1);
+            catalogue=(JSONObject)value;if(catalogue.optBoolean("_offline"))toast("Offline: showing saved products. Prices are confirmed when you order.");if(first){player.pause();if(attachedPlayer!=null)attachedPlayer.setPlayer(null);attachedPlayer=null;attachedVideoUrl=null;activeProduct=-1;videoPosters.clear();getSharedPreferences("feed_cache",MODE_PRIVATE).edit().putString("catalogue_shipping_"+BuildConfig.SITE_URL,catalogue.toString()).apply();products.clear();stories.clear();}page=next;pages=catalogue.optInt("pages",1);
             JSONArray list=catalogue.optJSONArray("products");
             if(list!=null)for(int i=0;i<list.length();i++){JSONObject p=list.optJSONObject(i);if(p!=null){products.add(p);}}
             if(first){applyWeeklyStories();images.prefetch(stories,0);}
             if(products.isEmpty()){adapter.notifyDataSetChanged();message("A new collection is coming","Our latest pictures and videos will appear here.",()->discover());return;}
-            adapter.notifyDataSetChanged();if(first)feed.scrollToPosition(0);feed.post(this::activateVisible);
+            updateFloating();adapter.notifyDataSetChanged();if(first)feed.scrollToPosition(0);feed.post(this::activateVisible);
         });
     }
     private void applyWeeklyStories(){
@@ -342,11 +343,13 @@ public final class MainActivity extends Activity {
     private void options(JSONObject product){
         trackProduct(product.optLong("id"));
         JSONArray colours=product.optJSONArray("colours"),sizes=product.optJSONArray("sizes");if(colours==null||colours.length()==0||sizes==null||sizes.length()==0){toast("Product options are unavailable. Please refresh.");return;}
-        LinearLayout box=sheet(product.optString("title"));box.addView(text(this,"Choose your colour",14,INK));
+        LinearLayout box=sheet(product.optString("title"));
+        ImageView productImage=new ImageView(this);productImage.setScaleType(ImageView.ScaleType.FIT_CENTER);productImage.setBackground(surface(0xffe9e5d7,14,this));box.addView(productImage,new LinearLayout.LayoutParams(-1,dp(this,240)));images.product(product,productImage);productImage.setContentDescription("Enlarge product image");productImage.setOnClickListener(v->enlargeProduct(product));
+        box.addView(text(this,"Includes Standard shipping to Kano",12,GOLD));box.addView(text(this,"Choose your colour",14,INK));
         List<String> labels=new ArrayList<>();for(int i=0;i<colours.length();i++)labels.add(colours.optJSONObject(i).optString("label"));labels.add("Other");
         final int[] selectedColour={0};
         LinearLayout colourRows=column(this);box.addView(colourRows);
-        EditText other=field(this,box,"Preferred colour (if Other)",InputType.TYPE_CLASS_TEXT);other.setFilters(new InputFilter[]{new InputFilter.LengthFilter(60)});other.setEnabled(false);
+        LinearLayout otherBox=column(this);box.addView(otherBox);EditText other=field(this,otherBox,"Preferred colour",InputType.TYPE_CLASS_TEXT);otherBox.setVisibility(View.GONE);other.setFilters(new InputFilter[]{new InputFilter.LengthFilter(60)});other.setEnabled(false);
         List<Button> choices=new ArrayList<>();
         for(int index=0;index<labels.size();index++){
             if(index%3==0)colourRows.addView(row(this));
@@ -355,27 +358,27 @@ public final class MainActivity extends Activity {
             LinearLayout row=(LinearLayout)colourRows.getChildAt(colourRows.getChildCount()-1);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(this,48),1);lp.setMargins(0,dp(this,4),dp(this,5),0);row.addView(choice,lp);
             choice.setOnClickListener(v->{
-                selectedColour[0]=colourIndex;other.setEnabled(colourIndex==colours.length());
+                selectedColour[0]=colourIndex;other.setEnabled(colourIndex==colours.length());otherBox.setVisibility(colourIndex==colours.length()?View.VISIBLE:View.GONE);
                 for(int n=0;n<choices.size();n++){Button button=choices.get(n);boolean selected=n==colourIndex;button.setTextColor(selected?Color.WHITE:INK);button.setBackground(surface(selected?INK:0xffe9e5d7,10,this));}
             });
         }
 
-        box.addView(text(this,"Size",13,MUTED));Spinner size=new Spinner(this);List<String> sizeLabels=new ArrayList<>();for(int i=0;i<sizes.length();i++)sizeLabels.add(sizes.optString(i));size.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,sizeLabels));box.addView(size,new LinearLayout.LayoutParams(-1,dp(this,48)));
-        EditText quantity=field(this,box,"Quantity",InputType.TYPE_CLASS_NUMBER);quantity.setText("1");
+        box.addView(text(this,"Size",13,MUTED));RadioGroup size=new RadioGroup(this);size.setOrientation(RadioGroup.HORIZONTAL);HorizontalScrollView sizeScroll=new HorizontalScrollView(this);sizeScroll.setHorizontalScrollBarEnabled(false);sizeScroll.addView(size);box.addView(sizeScroll);for(int i=0;i<sizes.length();i++){RadioButton item=new RadioButton(this);item.setId(View.generateViewId());item.setText(sizes.optString(i));item.setTextColor(INK);item.setButtonTintList(android.content.res.ColorStateList.valueOf(INK));size.addView(item);if(i==0)item.setChecked(true);}
+        LinearLayout quantityRow=row(this);Button minus=button(this,"−",false),plus=button(this,"+",false);EditText quantity=new EditText(this);quantity.setText("1");quantity.setInputType(InputType.TYPE_CLASS_NUMBER);quantity.setGravity(Gravity.CENTER);quantity.setTextColor(INK);box.addView(text(this,"Quantity",13,MUTED));quantityRow.addView(minus,new LinearLayout.LayoutParams(dp(this,48),dp(this,48)));quantityRow.addView(quantity,new LinearLayout.LayoutParams(0,dp(this,48),1));quantityRow.addView(plus,new LinearLayout.LayoutParams(dp(this,48),dp(this,48)));box.addView(quantityRow);minus.setOnClickListener(v->quantity.setText(""+Math.max(1,number(quantity.getText().toString())-1)));plus.setOnClickListener(v->quantity.setText(""+Math.min(100,number(quantity.getText().toString())+1)));
         boolean ready=catalogue!=null&&catalogue.optBoolean("ready");
         box.addView(text(this,ready?money(product.optLong("retail"))+" each":"Prices will be available soon",18,INK));
         if(ready)box.addView(text(this,money(product.optLong("bulk"))+" each when you select 6 mixed pieces across the catalogue",13,MUTED));
         box.addView(text(this,"After payment is confirmed, we pick up your items from the store.",12,MUTED));
-        Button add=button(this,"Add to bag",true);box.addView(add);add.setEnabled(ready);
+        Button add=button(this,"Add to bag",true);pinAction(box,add);add.setEnabled(ready);
         add.setOnClickListener(v->{
             int qty=number(quantity.getText().toString());if(qty<1||qty>100||store.count()+qty>500){toast("Choose 1–100 pieces, up to 500 pieces per order.");return;}
             boolean isOther=selectedColour[0]==colours.length();String note=isOther?other.getText().toString().trim():"";if(isOther&&note.isEmpty()){other.setError("Enter your preferred colour");return;}
             JSONObject variant=isOther?json("id","__c12_other","label","Other: "+note,"image",colours.optJSONObject(0).optString("image")):colours.optJSONObject(selectedColour[0]);
-            String selectedSize=size.getSelectedItem().toString();JSONObject existing=null;
+            String selectedSize=((RadioButton)size.findViewById(size.getCheckedRadioButtonId())).getText().toString();JSONObject existing=null;
             for(int i=0;i<store.bag.length();i++){JSONObject item=store.bag.optJSONObject(i);if(item.optLong("id")==product.optLong("id")&&item.optString("colour").equals(variant.optString("id"))&&item.optString("size").equals(selectedSize)&&item.optString("other_colour").equals(note)){existing=item;break;}}
             try{
                 if(existing!=null){if(existing.optInt("qty")+qty>100){toast("Maximum 100 pieces per selection.");return;}existing.put("qty",existing.optInt("qty")+qty);}
-                else store.bag.put(json("id",product.optLong("id"),"title",product.optString("title"),"colour",variant.optString("id"),"label",variant.optString("label"),"image",Preview.of(product).optString("image"),"preview",Preview.of(product),"size",selectedSize,"qty",qty,"other_colour",note,"retail",product.optLong("retail"),"bulk",product.optLong("bulk")));
+                else store.bag.put(json("id",product.optLong("id"),"title",product.optString("title"),"colour",variant.optString("id"),"label",variant.optString("label"),"image",Preview.of(product).optString("image"),"preview",Preview.of(product),"size",selectedSize,"qty",qty,"other_colour",note,"cargo_grams",product.optLong("cargo_grams",1000),"shipping_included",product.optBoolean("shipping_included"),"retail",product.optLong("retail"),"bulk",product.optLong("bulk")));
             }catch(JSONException ignored){return;}
             store.changed();updateCount();closeSheet();toast("Added to your bag");
         });
@@ -387,13 +390,13 @@ public final class MainActivity extends Activity {
         toast("Refreshing bag prices…");refreshBagItem(0);
     }
     private void refreshBagItem(int position){
-        if(position>=store.bag.length()){store.persist();bag();return;}
+        if(position>=store.bag.length()){store.persist();if(checkoutAfterRefresh){checkoutAfterRefresh=false;checkout();}else bag();return;}
         JSONObject item=store.bag.optJSONObject(position);long id=item.optLong("id");
         call("catalogue?product="+id+"&_fresh=1",null,(value,error)->{
-            if(error!=null){toast(error);return;}
+            if(error!=null){checkoutAfterRefresh=false;checkoutPricesReady=false;toast(error);return;}
             catalogue=(JSONObject)value;JSONArray found=catalogue.optJSONArray("products");JSONObject product=found==null?null:found.optJSONObject(0);
-            if(product==null){toast(item.optString("title")+" is no longer available. Remove it from the bag.");bag();return;}
-            try{item.put("retail",product.optLong("retail"));item.put("bulk",product.optLong("bulk"));item.put("preview",Preview.of(product));}catch(JSONException ignored){}
+            if(product==null){checkoutAfterRefresh=false;checkoutPricesReady=false;toast(item.optString("title")+" is no longer available. Remove it from the bag.");bag();return;}
+            try{item.put("retail",product.optLong("retail"));item.put("bulk",product.optLong("bulk"));item.put("cargo_grams",product.optLong("cargo_grams",1000));item.put("shipping_included",product.optBoolean("shipping_included"));item.put("preview",Preview.of(product));}catch(JSONException ignored){}
             refreshBagItem(position+1);
         });
     }
@@ -410,11 +413,13 @@ public final class MainActivity extends Activity {
             plus.setOnClickListener(v->{if(item.optInt("qty")<100&&store.count()<500){try{item.put("qty",item.optInt("qty")+1);}catch(JSONException ignored){}store.changed();updateCount();bag();}});
             remove.setOnClickListener(v->{store.bag.remove(index);store.changed();updateCount();bag();});
         }
-        box.addView(text(this,"Abaya subtotal  "+money(store.total()),21,INK));box.addView(text(this,"Cargo is charged separately after weighing.",12,MUTED));Button next=button(this,"Continue to checkout",true);box.addView(next);next.setOnClickListener(v->checkout());
+        box.addView(text(this,"Subtotal · Standard shipping included  "+money(store.total()),21,INK));box.addView(text(this,"Includes Standard shipping to Kano. Fast Track is available at checkout. Local delivery is separate.",12,MUTED));Button next=button(this,"Continue to checkout",true);box.addView(next);next.setOnClickListener(v->checkout());
     }
+    private boolean checkoutAfterRefresh=false,checkoutPricesReady=false;
     private void checkout(){
         if(api.vault.token().isEmpty()){closeSheet();account();toast("Sign in to complete your order. Your bag is saved.");return;}
         if(catalogue==null||!catalogue.optBoolean("ready")){toast("The store has not finished setting up payments.");return;}
+        if(!checkoutPricesReady){checkoutAfterRefresh=true;checkoutPricesReady=true;refreshBagItem(0);return;}checkoutPricesReady=false;
         call("mobile/session",null,(value,error)->{if(error!=null){toast(error);return;}JSONObject profile=(JSONObject)value;JSONObject delivery=profile.optJSONObject("delivery");if(!completeDelivery(delivery)){closeSheet();account();toast("Complete your account details to continue.");editDetails(()->checkout());return;}checkoutDetails(delivery);});
     }
     private boolean completeDelivery(JSONObject details){if(details==null)return false;for(String key:new String[]{"name","phone","state","town","address"})if(details.optString(key).trim().length()<2)return false;return Nigeria.valid(details.optString("state"),details.optString("town"));}
@@ -423,13 +428,14 @@ public final class MainActivity extends Activity {
         LinearLayout box=sheet("Review your order");
         LinearLayout deliveryCard=accountCard(box);deliveryCard.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,16));deliveryCard.addView(text(this,"DELIVERY DETAILS",11,GOLD));TextView customer=text(this,delivery.optString("name"),19,INK);customer.setTypeface(null,Typeface.BOLD);deliveryCard.addView(customer);deliveryCard.addView(text(this,delivery.optString("phone"),14,INK));deliveryCard.addView(text(this,delivery.optString("address")+"\n"+delivery.optString("town")+" LGA, "+delivery.optString("state"),14,MUTED));Button edit=button(this,"Edit delivery details",false);deliveryCard.addView(edit);edit.setOnClickListener(v->{closeSheet();account();editDetails(()->checkout());});
         TextView routeTitle=text(this,"Choose cargo service",18,INK);LinearLayout.LayoutParams routeTitleLayout=new LinearLayout.LayoutParams(-1,-2);routeTitleLayout.topMargin=dp(this,20);box.addView(routeTitle,routeTitleLayout);
-        box.addView(text(this,"Prices below are per kilogram and include Nigerian clearing.",12,MUTED));JSONArray routes=catalogue.optJSONArray("routes");
+        box.addView(text(this,"Standard shipping to Kano is included. Fast Track replaces the Standard fee.",12,MUTED));JSONArray routes=catalogue.optJSONArray("routes");
         RadioGroup route=new RadioGroup(this);route.setOrientation(RadioGroup.VERTICAL);box.addView(route);final int[] routeChoice={0};
-        for(int i=0;i<routes.length();i++){JSONObject option=routes.optJSONObject(i);long ngn=Math.round(option.optLong("egp")*catalogue.optLong("rate")/10000.0);RadioButton choice=new RadioButton(this);choice.setId(View.generateViewId());choice.setTag(i);choice.setText(option.optString("label")+"\n"+money(ngn)+" / kg · "+option.optString("days")+" days");choice.setTextSize(14);choice.setTextColor(INK);choice.setButtonTintList(android.content.res.ColorStateList.valueOf(INK));choice.setPadding(dp(this,12),dp(this,13),dp(this,12),dp(this,13));GradientDrawable bg=surface(Color.WHITE,12,this);bg.setStroke(dp(this,1),LINE);choice.setBackground(bg);RadioGroup.LayoutParams rp=new RadioGroup.LayoutParams(-1,-2);rp.topMargin=dp(this,9);route.addView(choice,rp);if(i==0)choice.setChecked(true);}
-        route.setOnCheckedChangeListener((group,id)->{RadioButton chosen=group.findViewById(id);if(chosen!=null)routeChoice[0]=(int)chosen.getTag();});
+        for(int i=0;i<routes.length();i++){JSONObject option=routes.optJSONObject(i);long ngn=option.optLong("ngn");RadioButton choice=new RadioButton(this);choice.setId(View.generateViewId());choice.setTag(i);choice.setText(option.optString("label")+"\n"+(i==0?"Included":"+ "+money(shippingUpgrade())+" for this order")+" · "+option.optString("days")+" days");choice.setTextSize(14);choice.setTextColor(INK);choice.setButtonTintList(android.content.res.ColorStateList.valueOf(INK));choice.setPadding(dp(this,12),dp(this,13),dp(this,12),dp(this,13));GradientDrawable bg=surface(Color.WHITE,12,this);bg.setStroke(dp(this,1),LINE);choice.setBackground(bg);RadioGroup.LayoutParams rp=new RadioGroup.LayoutParams(-1,-2);rp.topMargin=dp(this,9);route.addView(choice,rp);if(i==0)choice.setChecked(true);}
+        TextView checkoutTotal=text(this,"Order total  "+money(store.total()),22,INK);box.addView(checkoutTotal);
+        route.setOnCheckedChangeListener((group,id)->{RadioButton chosen=group.findViewById(id);if(chosen!=null){routeChoice[0]=(int)chosen.getTag();checkoutTotal.setText("Order total  "+money(store.total()+(routeChoice[0]==0?0:shippingUpgrade())));}});
         LinearLayout termsCard=accountCard(box);termsCard.setPadding(dp(this,16),dp(this,13),dp(this,16),dp(this,15));termsCard.addView(text(this,"Before you place your order",17,INK));
         termsCard.addView(text(this,"Store pickup\nAfter payment confirmation, we collect your items from the store. Unavailable items can be replaced or refunded.",13,MUTED));
-        termsCard.addView(text(this,"Cargo & delivery\nDelivery estimates start after dispatch. Cargo is calculated after weighing and must be fully paid before release.",13,MUTED));
+        termsCard.addView(text(this,"Cargo & delivery\nDelivery estimates start after dispatch. Your selected shipping service includes Nigerian clearing and is paid with this order.",13,MUTED));
         termsCard.addView(text(this,"Local delivery\nWe arrange an independent provider. Their delivery fee is paid separately.",13,MUTED));
         termsCard.addView(text(this,"Wholesale pricing\nSix or more mixed pieces in your bag qualify for wholesale prices.",13,MUTED));
         CheckBox terms=new CheckBox(this);terms.setText("I agree to the order and shipping terms");terms.setTextSize(13);terms.setTextColor(INK);terms.setPadding(0,dp(this,8),0,0);terms.setButtonTintList(android.content.res.ColorStateList.valueOf(INK));termsCard.addView(terms);
@@ -438,7 +444,7 @@ public final class MainActivity extends Activity {
         order.setOnClickListener(v->{
             if(!terms.isChecked()){toast("Please read and accept the order terms.");return;}
             JSONArray items=new JSONArray();for(int i=0;i<store.bag.length();i++){JSONObject item=store.bag.optJSONObject(i);items.put(json("id",item.optLong("id"),"colour",item.optString("colour"),"other_colour",item.optString("other_colour"),"size",item.optString("size"),"qty",item.optInt("qty"),"expected_unit",item.optLong(store.count()>=6?"bulk":"retail")));}
-            JSONObject body=json("request_id",store.requestId(),"items",items,"delivery",delivery,"route",routes.optJSONObject(routeChoice[0]).optString("id"));
+            JSONObject body=json("request_id",store.requestId(),"items",items,"delivery",delivery,"route",routes.optJSONObject(routeChoice[0]).optString("id"),"expected_total",store.total()+(routeChoice[0]==0?0:shippingUpgrade()));
             order.setEnabled(false);checkoutBusy=true;if(sheet!=null)sheet.setCancelable(false);
             call("orders",body,(value,error)->{checkoutBusy=false;order.setEnabled(true);if(sheet!=null)sheet.setCancelable(true);if(error!=null){toast(error);return;}store.clearBag();updateCount();closeSheet();orders(false);if(onlineAvailable&&paymentMethod.getSelectedItemPosition()==0)paystack(((JSONObject)value).optLong("id"),"product",order);else toast("Order placed. Transfer using your order reference.");});
         });
@@ -575,7 +581,7 @@ public final class MainActivity extends Activity {
         card.addView(text(this,"Abaya payment",16,INK));payment(card,order,"product",data.optJSONObject("product_payment"));
         card.addView(text(this,"Cargo payment",16,INK));
         if(cargo.has("grams"))card.addView(text(this,cargo.optInt("grams")/1000.0+" kg · includes Nigerian clearing\nCargo reference: "+cargo.optString("tracking"),13,MUTED));
-        if(cargo.optLong("egp")>0)payment(card,order,"cargo",cargoPay);else card.addView(text(this,"Shipping will be calculated after weighing.",13,MUTED));
+        if(cargo.optString("billing").equals("included_shipping"))card.addView(text(this,"Shipping included in order total"+(data.optJSONObject("product_payment").optString("status").equals("paid")?" · Paid":" · Awaiting payment"),13,INK));else if(cargo.optLong("egp")>0)payment(card,order,"cargo",cargoPay);else card.addView(text(this,"Shipping will be calculated after weighing.",13,MUTED));
         JSONObject local=cargo.optJSONObject("local");if(local!=null){card.addView(text(this,"Local delivery",16,INK));card.addView(text(this,local.optString("provider")+" · "+local.optString("waybill")+"\n"+money(local.optLong("fee"))+" paid separately to the provider",13,MUTED));}
         Button updates=button(this,"Tracking & updates",false);card.addView(updates);updates.setOnClickListener(v->{LinearLayout history=sheet(order.optString("reference"));JSONArray events=data.optJSONArray("history");for(int i=events.length()-1;i>=0;i--){JSONObject event=events.optJSONObject(i);history.addView(text(this,labelTime(event.optString("at"))+"\n"+event.optString("message"),14,INK));}});
     }
@@ -639,6 +645,23 @@ public final class MainActivity extends Activity {
     private String label(String value){if(value.equals("awaiting_purchase"))return "Preparing for store pickup";if(value.equals("purchased"))return "Picked up from store";return value.replace('_',' ');}
     private String labelTime(String value){try{return Instant.parse(value).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm"));}catch(Exception ignored){return value;}}
     private int number(String value){try{return Integer.parseInt(value);}catch(NumberFormatException ignored){return 0;}}
+    private void updateFloating(){
+        if(discoverBody==null||!screen.equals("Discover"))return;
+        if(floatingButtons==null||floatingButtons.getParent()!=discoverBody){floatingButtons=column(this);backTop=button(this,"↑",false);backTop.setContentDescription("Back to top");floatingButtons.addView(backTop,new LinearLayout.LayoutParams(dp(this,46),dp(this,46)));backTop.setOnClickListener(v->{if(feed!=null){((LinearLayoutManager)feed.getLayoutManager()).scrollToPositionWithOffset(0,0);feed.post(this::activateVisible);}});FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.RIGHT);lp.setMargins(0,0,dp(this,14),dp(this,16));discoverBody.addView(floatingButtons,lp);}
+        while(floatingButtons.getChildCount()>1)floatingButtons.removeViewAt(1);
+        String channel=catalogue==null?"":catalogue.optString("whatsapp_channel");if(channel.matches("https://(www\\.)?whatsapp\\.com/channel/[a-zA-Z0-9_-]+/?")){Ui.Icon whatsapp=new Ui.Icon(this,"WhatsApp");whatsapp.colour=Color.WHITE;whatsapp.setBackground(surface(0xff167a50,24,this));whatsapp.setContentDescription("Follow our WhatsApp channel");LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(this,46),dp(this,46));lp.topMargin=dp(this,10);floatingButtons.addView(whatsapp,lp);whatsapp.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(channel)));}catch(Exception e){toast("Could not open WhatsApp channel.");}});}
+        backTop.setVisibility(feed!=null&&((LinearLayoutManager)feed.getLayoutManager()).findFirstVisibleItemPosition()>0?View.VISIBLE:View.GONE);floatingButtons.bringToFront();
+    }
+    private long shippingUpgrade(){long sum=0;if(catalogue==null)return 0;for(int i=0;i<store.bag.length();i++){JSONObject item=store.bag.optJSONObject(i);long grams=item.optLong("cargo_grams",1000);sum+=(Math.round(grams*catalogue.optLong("shipping_fast")/1000.0)-Math.round(grams*catalogue.optLong("shipping_standard")/1000.0))*item.optInt("qty");}return sum;}
+    private void pinAction(LinearLayout box,Button action){ScrollView scroll=(ScrollView)box.getParent();LinearLayout frame=(LinearLayout)scroll.getParent();LinearLayout footer=column(this);footer.setPadding(dp(this,20),dp(this,4),dp(this,20),dp(this,16));footer.setBackgroundColor(PAPER);footer.addView(action);frame.addView(footer);}
+    private void fullScreenSheet(){if(sheet!=null&&sheet.getWindow()!=null){Window w=sheet.getWindow();w.setLayout(-1,-1);w.setGravity(Gravity.CENTER);w.getDecorView().setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());v.setPadding(safe.left,safe.top,safe.right,safe.bottom);}else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});w.getDecorView().requestApplyInsets();}}
+    private void enlargeProduct(JSONObject product){LinearLayout box=sheet(product.optString("title"));fullScreenSheet();ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);box.addView(image,new LinearLayout.LayoutParams(-1,(int)(getResources().getDisplayMetrics().heightPixels*.65)));images.product(product,image);Button back=button(this,"Back to options",true);pinAction(box,back);back.setOnClickListener(v->options(product));}
+    private boolean inviteNotifications(){
+        android.content.SharedPreferences prefs=getSharedPreferences("c12_notifications",0);
+        if(!Push.configured()||Push.enabled(this)||prefs.getBoolean("invited",false))return false;
+        prefs.edit().putBoolean("invited",true).apply();LinearLayout box=sheet("Stay updated with Cairo12");box.addView(text(this,"Get order updates and discover new abayas. You can change your choice in Account at any time.",16,MUTED));
+        Button enable=button(this,"Enable notifications",true),later=button(this,"Maybe later",false);box.addView(enable);box.addView(later);later.setOnClickListener(v->closeSheet());enable.setOnClickListener(v->{Push.enable(this,true);if(Build.VERSION.SDK_INT>=33&&!Push.permission(this))requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},412);else{Push.sync(this);closeSheet();toast(api.vault.token().isEmpty()?"Notifications enabled. Sign in to receive your updates.":"Notifications enabled.");}});return true;
+    }
     private void notificationSettings(){
         LinearLayout box=sheet("Notifications");
         box.addView(text(this,"Choose whether Cairo12 can notify you about new arrivals and updates to your orders.",14,MUTED));
@@ -654,13 +677,14 @@ public final class MainActivity extends Activity {
     private final Runnable promotionPoll=new Runnable(){public void run(){checkPromotion();handler.postDelayed(this,60000);}};
     private void checkPromotion(){
         if(!foreground||introShowing||promotionShown||promotionLoading||sheet!=null||checkoutBusy||!screen.equals("Discover"))return;
+        if(inviteNotifications())return;
         promotionLoading=true;call("announcements?platform=app",null,(value,error)->{promotionLoading=false;if(error!=null||!foreground||introShowing||sheet!=null||!screen.equals("Discover"))return;
             JSONArray campaigns=((JSONObject)value).optJSONArray("campaigns");if(campaigns==null)return;
             android.content.SharedPreferences seen=getSharedPreferences("c12_promotions",0);
             for(int i=0;i<campaigns.length();i++){JSONObject c=campaigns.optJSONObject(i);String id=c.optString("id");String stamp=c.optString("frequency").equals("daily")?java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString():"once";if(stamp.equals(seen.getString(id,"")))continue;
-                promotionShown=true;seen.edit().putString(id,stamp).apply();LinearLayout box=sheet(c.optString("title"));
-                String imageUrl=c.optString("image");if(!imageUrl.isEmpty()){ImageView picture=new ImageView(this);picture.setScaleType(ImageView.ScaleType.FIT_CENTER);box.addView(picture,new LinearLayout.LayoutParams(-1,dp(this,240)));images.load(imageUrl,picture);}
-                box.addView(text(this,c.optString("body"),15,INK));Button explore=button(this,c.optLong("product")>0?"View product":"Continue shopping",true);box.addView(explore);explore.setOnClickListener(v->{closeSheet();if(c.optLong("product")>0)openPromotionProduct(""+c.optLong("product"));});break;
+                promotionShown=true;seen.edit().putString(id,stamp).apply();LinearLayout box=sheet("");fullScreenSheet();
+                String imageUrl=c.optString("image");if(!imageUrl.isEmpty()){ImageView picture=new ImageView(this);picture.setScaleType(ImageView.ScaleType.FIT_CENTER);picture.setBackground(surface(0xffe9e5d7,16,this));box.addView(picture,new LinearLayout.LayoutParams(-1,(int)(getResources().getDisplayMetrics().heightPixels*.46)));images.load(imageUrl,picture);}
+                TextView kicker=text(this,"CURATED BY CAIRO12",11,GOLD);kicker.setLetterSpacing(.14f);box.addView(kicker);TextView headline=text(this,c.optString("title"),30,INK);headline.setTypeface(Typeface.SERIF);box.addView(headline);box.addView(text(this,c.optString("body"),16,MUTED));Button explore=button(this,c.optString("button",c.optLong("product")>0?"Shop this abaya":"Explore collection"),true);pinAction(box,explore);explore.setOnClickListener(v->{closeSheet();if(c.optLong("product")>0)openPromotionProduct(""+c.optLong("product"));});break;
             }
         });
     }
